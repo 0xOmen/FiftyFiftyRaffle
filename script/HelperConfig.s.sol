@@ -1,0 +1,54 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+import {Script} from "forge-std/Script.sol";
+import {ERC20Mock} from "lib/openzeppelin-contracts/contracts/mocks/token/ERC20Mock.sol";
+
+contract HelperConfig is Script {
+    NetworkConfig public activeNetworkConfig;
+
+    struct NetworkConfig {
+        address usdc;
+        uint256 deployerKey;
+    }
+
+    uint256 public DEFAULT_ANVIL_KEY = 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80;
+
+    constructor() {
+        if (block.chainid == 31337) {
+            activeNetworkConfig = getAnvilConfig();
+        } else if (block.chainid == 8453) {
+            activeNetworkConfig = getBaseConfig();
+        } else if (block.chainid == 84532) {
+            activeNetworkConfig = getBaseSepoliaConfig();
+        } else {
+            activeNetworkConfig = getOrCreateAnvilEthConfig();
+        }
+    }
+
+    function getOrCreateAnvilEthConfig() public returns (NetworkConfig memory) {
+        if (activeNetworkConfig.usdc != address(0)) {
+            return activeNetworkConfig;
+        }
+        vm.startBroadcast();
+        ERC20Mock usdc = new ERC20Mock();
+        vm.stopBroadcast();
+        return NetworkConfig({usdc: address(usdc), deployerKey: DEFAULT_ANVIL_KEY});
+    }
+
+    function getAnvilConfig() public view returns (NetworkConfig memory) {
+        return NetworkConfig({usdc: address(0), deployerKey: DEFAULT_ANVIL_KEY});
+    }
+
+    function getBaseConfig() public pure returns (NetworkConfig memory) {
+        // Base mainnet WETH address
+        address usdc = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
+        return NetworkConfig({usdc: address(usdc), deployerKey: 0});
+    }
+
+    function getBaseSepoliaConfig() public pure returns (NetworkConfig memory) {
+        // Base Sepolia WETH address
+        address usdc = 0x036CbD53842c5426634e7929541eC2318f3dCF7e;
+        return NetworkConfig({usdc: address(usdc), deployerKey: 0});
+    }
+}

@@ -626,4 +626,145 @@ contract RaffleTest is Test {
         vm.expectRevert(FiftyFiftyRaffle.PrizePoolIsZero.selector);
         raffle.manuallyCloseRaffle(1, roundedTime);
     }
+
+    /* Claim Protocol Fee Tests */
+
+    function test_ClaimProtocolFee() public {
+        // Setup raffle and generate protocol fees
+        raffle.createRaffle(beneficiary, ENTRY_FEE);
+        uint256 winningTime = block.timestamp + 3600;
+        vm.prank(entrant1);
+        raffle.enterRaffleWithGuess(winningTime, 1);
+        vm.prank(entrant2);
+        raffle.enterRaffleWithGuess(winningTime - 60, 1);
+
+        vm.warp(block.timestamp + 3700);
+        vm.prank(owner);
+        raffle.setWinningTimestamp(1, winningTime);
+        raffle.distributePrize(1);
+
+        // Get initial balances
+        uint256 initialOwnerBalance = mockToken.balanceOf(owner);
+        uint256 initialContractBalance = mockToken.balanceOf(address(raffle));
+        uint256 accruedFee = raffle.getAccruedProtocolFee();
+
+        // Claim protocol fee
+        vm.prank(owner);
+        raffle.claimProtocolFee();
+
+        // Verify balances
+        assertEq(mockToken.balanceOf(owner), initialOwnerBalance + accruedFee);
+        assertEq(mockToken.balanceOf(address(raffle)), initialContractBalance - accruedFee);
+        assertEq(raffle.getAccruedProtocolFee(), 0);
+    }
+
+    function test_ClaimProtocolFeeRevertsWhenNotOwner() public {
+        vm.prank(user1);
+        vm.expectRevert();
+        raffle.claimProtocolFee();
+    }
+
+    function test_ClaimProtocolFeeWithZeroAccruedFee() public {
+        uint256 initialOwnerBalance = mockToken.balanceOf(owner);
+        vm.prank(owner);
+        raffle.claimProtocolFee();
+        assertEq(mockToken.balanceOf(owner), initialOwnerBalance);
+        assertEq(raffle.getAccruedProtocolFee(), 0);
+    }
+
+    function test_ClaimProtocolFeeMultipleTimes() public {
+        // Generate protocol fees from multiple raffles
+        raffle.createRaffle(beneficiary, ENTRY_FEE);
+        uint256 winningTime = block.timestamp + 3600;
+        vm.prank(entrant1);
+        raffle.enterRaffleWithGuess(winningTime, 1);
+
+        vm.warp(block.timestamp + 3700);
+        vm.prank(owner);
+        raffle.setWinningTimestamp(1, winningTime);
+        raffle.distributePrize(1);
+
+        vm.prank(owner);
+        raffle.claimProtocolFee();
+
+        // Create second raffle and generate more fees
+        raffle.createRaffle(entrant1, ENTRY_FEE);
+        uint256 winningTime2 = block.timestamp + 3600;
+        vm.prank(entrant2);
+        raffle.enterRaffleWithGuess(winningTime2, 2);
+
+        vm.warp(block.timestamp + 3700);
+        vm.prank(owner);
+        raffle.setWinningTimestamp(2, winningTime2);
+        raffle.distributePrize(2);
+
+        vm.prank(owner);
+        raffle.claimProtocolFee();
+
+        assertEq(raffle.getAccruedProtocolFee(), 0);
+    }
+
+    /* Fuzzing Tests */
+
+    function test_Fuzz_MultipleEntrantsWithRandomGuesses(uint256 guess1, uint256 guess2, uint256 guess3) public {
+        // Bound the guesses to reasonable ranges
+        vm.assume(guess1 >= block.timestamp + 60 && guess1 <= block.timestamp + 86400); // 1 minute to 1 day
+        vm.assume(guess2 >= block.timestamp + 60 && guess2 <= block.timestamp + 86400);
+        vm.assume(guess3 >= block.timestamp + 60 && guess3 <= block.timestamp + 86400);
+        vm.assume(
+            raffle.roundDownToMinute(guess1) != raffle.roundDownToMinute(guess2)
+                && raffle.roundDownToMinute(guess1) != raffle.roundDownToMinute(guess3)
+                && raffle.roundDownToMinute(guess2) != raffle.roundDownToMinute(guess3)
+        ); // Ensure unique guesses
+
+        // Create raffle
+        raffle.createRaffle(beneficiary, ENTRY_FEE);
+
+        // All three entrants enter with their guesses
+        vm.prank(entrant1);
+        raffle.enterRaffleWithGuess(guess1, 1);
+
+        vm.prank(entrant2);
+        raffle.enterRaffleWithGuess(guess2, 1);
+
+        vm.prank(entrant3);
+        raffle.enterRaffleWithGuess(guess3, 1);
+
+        // Verify all entries were recorded
+        uint256 roundedGuess1 = raffle.roundDownToMinute(guess1);
+        uint256 roundedGuess2 = raffle.roundDownToMinute(guess2);
+        uint256 roundedGuess3 = raffle.roundDownToMinute(guess3);
+
+        assertEq(raffle.getGuesses(1, roundedGuess1), entrant1);
+        assertEq(raffle.getGuesses(1, roundedGuess2), entrant2);
+        assertEq(raffle.getGuesses(1, roundedGuess3), entrant3);
+
+        // Verify prize pool accumulated correctly
+        assertEq(raffle.getPrizePool(1), ENTRY_FEE * 3);
+
+        // Set winning timestamp and distribute prize
+        uint256 winningTime = block.timestamp + 86300;
+        vm.warp(winningTime + 3600); // Advance time
+
+        vm.prank(owner);
+        raffle.setWinningTimestamp(1, winningTime);
+
+        // Find the winner (closest to winning time)
+        address winner = raffle.getWinner(1);
+        assertTrue(winner == entrant1 || winner == entrant2 || winner == entrant3);
+
+        // Distribute prize
+        uint256 initialWinnerBalance = mockToken.balanceOf(winner);
+        raffle.distributePrize(1);
+
+        // Verify winner received payout
+        uint256 totalPrize = ENTRY_FEE * 3;
+        uint256 protocolFeeAmount = (totalPrize * PROTOCOL_FEE) / 10000;
+        uint256 payout = (totalPrize - protocolFeeAmount) / 2;
+
+        assertEq(mockToken.balanceOf(winner), initialWinnerBalance + payout);
+        assertEq(raffle.getPrizePool(1), 0);
+        assertEq(raffle.getAccruedProtocolFee(), protocolFeeAmount);
+        assertFalse(raffle.getIsRaffleOpen(1));
+    }
 }

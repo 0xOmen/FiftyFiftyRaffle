@@ -116,7 +116,7 @@ contract RaffleTest is Test {
     }
 
     function test_CreateRaffleRevertsWithLowEntryFee() public {
-        uint256 lowFee = 990000; // 0.99 USDC (6 decimals)
+        uint256 lowFee = 99999; // 0.099999 USDC (6 decimals)
         vm.expectRevert(FiftyFiftyRaffle.EntryFeeTooLow.selector);
         raffle.createRaffle(beneficiary, lowFee);
     }

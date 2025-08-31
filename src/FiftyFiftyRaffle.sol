@@ -36,7 +36,7 @@ contract FiftyFiftyRaffle is Ownable {
     event RaffleWon(uint256 indexed raffleNumber, address indexed winner, uint256 payout);
     event RaffleClosed(uint256 indexed raffleNumber);
     event BeneficiaryPaid(uint256 indexed raffleNumber, address indexed beneficiary, uint256 payout);
-
+    event RaffleCreated(uint256 indexed raffleNumber, address indexed beneficiary, uint256 entryFee);
     /* State Variables */
 
     // USDC token address
@@ -83,7 +83,7 @@ contract FiftyFiftyRaffle is Ownable {
         if (_beneficiary == address(0)) {
             revert BeneficiaryCannotBeZeroAddress();
         }
-        if (_entryFee <= 1000000) {
+        if (_entryFee < 100000) {
             revert EntryFeeTooLow();
         }
         raffleNumber++;
@@ -92,6 +92,7 @@ contract FiftyFiftyRaffle is Ownable {
         beneficiary[raffleNumber] = _beneficiary;
         prizePool[raffleNumber] = 0;
         entryFee[raffleNumber] = _entryFee;
+        emit RaffleCreated(raffleNumber, _beneficiary, _entryFee);
     }
 
     /**

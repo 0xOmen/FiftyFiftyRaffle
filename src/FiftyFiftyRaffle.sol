@@ -76,6 +76,7 @@ contract FiftyFiftyRaffle is Ownable {
         isRaffleOpen[raffleNumber] = true;
         beneficiary[raffleNumber] = _beneficiary;
         prizePool[raffleNumber] = 0;
+        entryFee[raffleNumber] = _entryFee;
     }
 
     function enterRaffleWithGuess(uint256 guess, uint256 _raffleNumber) external {

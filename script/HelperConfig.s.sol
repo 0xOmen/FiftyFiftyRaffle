@@ -36,8 +36,11 @@ contract HelperConfig is Script {
         return NetworkConfig({usdc: address(usdc), deployerKey: DEFAULT_ANVIL_KEY});
     }
 
-    function getAnvilConfig() public view returns (NetworkConfig memory) {
-        return NetworkConfig({usdc: address(0), deployerKey: DEFAULT_ANVIL_KEY});
+    function getAnvilConfig() public returns (NetworkConfig memory) {
+        vm.startBroadcast();
+        ERC20Mock usdc = new ERC20Mock();
+        vm.stopBroadcast();
+        return NetworkConfig({usdc: address(usdc), deployerKey: DEFAULT_ANVIL_KEY});
     }
 
     function getBaseConfig() public pure returns (NetworkConfig memory) {

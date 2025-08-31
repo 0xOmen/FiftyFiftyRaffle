@@ -57,4 +57,76 @@ contract RaffleTest is Test {
         vm.prank(user1);
         mockToken.approve(address(raffle), type(uint256).max);
     }
+
+    /* Constructor and Deployment Tests */
+
+    function test_ConstructorSetsTokenAddress() public view {
+        assertEq(raffle.getTokenAddress(), address(mockToken));
+    }
+
+    function test_ConstructorSetsProtocolFee() public view {
+        assertEq(raffle.getProtocolFee(), PROTOCOL_FEE);
+    }
+
+    function test_ConstructorSetsOwner() public view {
+        address defaultAnvilAddress = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266;
+        assertEq(raffle.owner(), defaultAnvilAddress);
+    }
+
+    function test_ConstructorInitializesRaffleNumberToZero() public view {
+        assertEq(raffle.getRaffleNumber(), 0);
+    }
+
+    function test_ConstructorInitializesAccruedProtocolFeeToZero() public view {
+        assertEq(raffle.getAccruedProtocolFee(), 0);
+    }
+
+    /* Set Fee Tests */
+
+    function test_SetProtocolFee() public {
+        uint256 newFee = 100; // 1%
+        vm.prank(owner);
+        raffle.setProtocolFee(newFee);
+        assertEq(raffle.getProtocolFee(), newFee);
+    }
+
+    function test_SetProtocolFeeRevertsWhenNotOwner() public {
+        uint256 newFee = 100;
+        vm.prank(user1);
+        vm.expectRevert();
+        raffle.setProtocolFee(newFee);
+    }
+
+    /* Create Raffle Tests */
+
+    function test_CreateRaffle() public {
+        raffle.createRaffle(beneficiary, ENTRY_FEE);
+        assertEq(raffle.getRaffleNumber(), 1);
+        assertEq(raffle.getBeneficiary(1), beneficiary);
+        assertEq(raffle.getEntryFee(1), ENTRY_FEE);
+        assertEq(raffle.getPrizePool(1), 0);
+        assertTrue(raffle.getIsRaffleOpen(1));
+    }
+
+    function test_CreateRaffleRevertsWithZeroBeneficiary() public {
+        vm.expectRevert(FiftyFiftyRaffle.BeneficiaryCannotBeZeroAddress.selector);
+        raffle.createRaffle(address(0), ENTRY_FEE);
+    }
+
+    function test_CreateRaffleRevertsWithLowEntryFee() public {
+        uint256 lowFee = 990000; // 0.99 USDC (6 decimals)
+        vm.expectRevert(FiftyFiftyRaffle.EntryFeeTooLow.selector);
+        raffle.createRaffle(beneficiary, lowFee);
+    }
+
+    function test_CreateMultipleRaffles() public {
+        raffle.createRaffle(beneficiary, ENTRY_FEE);
+        raffle.createRaffle(entrant1, ENTRY_FEE * 2);
+
+        assertEq(raffle.getRaffleNumber(), 2);
+        assertEq(raffle.getBeneficiary(1), beneficiary);
+        assertEq(raffle.getBeneficiary(2), entrant1);
+        assertEq(raffle.getEntryFee(1), ENTRY_FEE);
+        assertEq(raffle.getEntryFee(2), ENTRY_FEE * 2);
+    }
 }

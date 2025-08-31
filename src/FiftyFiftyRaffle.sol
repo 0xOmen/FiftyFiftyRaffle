@@ -16,6 +16,7 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 contract FiftyFiftyRaffle is Ownable {
     error BeneficiaryCannotBeZeroAddress();
     error RaffleDoesNotExist();
+    error GuessTimestampTooLow();
     error GuessTimestampTooHigh();
     error GuessAlreadyEntered();
     error EntryFeeTooLow();
@@ -87,8 +88,8 @@ contract FiftyFiftyRaffle is Ownable {
             revert RaffleIsClosed();
         }
         guess = roundDownToMinute(guess);
-        if (guess > block.timestamp) {
-            revert GuessTimestampTooHigh();
+        if (guess < startTimestamp[_raffleNumber]) {
+            revert GuessTimestampTooLow();
         }
         // Check if the guess has already been entered
         if (guesses[_raffleNumber][guess] != address(0)) {
@@ -108,7 +109,7 @@ contract FiftyFiftyRaffle is Ownable {
         if (_raffleNumber > raffleNumber) {
             revert RaffleDoesNotExist();
         }
-        if (msg.sender != beneficiary[_raffleNumber] || msg.sender != owner()) {
+        if (msg.sender != beneficiary[_raffleNumber] && msg.sender != owner()) {
             revert AddressNotAuthorized();
         }
         if (!isRaffleOpen[_raffleNumber]) {
@@ -123,7 +124,7 @@ contract FiftyFiftyRaffle is Ownable {
         if (_raffleNumber > raffleNumber) {
             revert RaffleDoesNotExist();
         }
-        if (msg.sender != beneficiary[_raffleNumber] || msg.sender != owner()) {
+        if (msg.sender != beneficiary[_raffleNumber] && msg.sender != owner()) {
             revert AddressNotAuthorized();
         }
         if (_winningTimestamp >= block.timestamp) {

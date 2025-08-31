@@ -34,6 +34,8 @@ contract RaffleTest is Test {
         mockToken = ERC20Mock(usdcTokenAddress);
         owner = raffle.owner();
 
+        vm.warp(3700); // advance 1 hour and 1 minute from now
+
         // Mint tokens to test addresses
         mockToken.mint(beneficiary, INITIAL_TOKEN_SUPPLY);
         mockToken.mint(entrant1, INITIAL_TOKEN_SUPPLY);
@@ -128,5 +130,97 @@ contract RaffleTest is Test {
         assertEq(raffle.getBeneficiary(2), entrant1);
         assertEq(raffle.getEntryFee(1), ENTRY_FEE);
         assertEq(raffle.getEntryFee(2), ENTRY_FEE * 2);
+    }
+
+    /* Enter Raffle Tests */
+
+    function test_EnterRaffleWithGuess() public {
+        raffle.createRaffle(beneficiary, ENTRY_FEE);
+        uint256 guess = block.timestamp + 3600; // 1 hour in future
+        uint256 roundedGuess = raffle.roundDownToMinute(guess);
+
+        vm.prank(entrant1);
+        raffle.enterRaffleWithGuess(guess, 1);
+
+        assertEq(raffle.getGuesses(1, roundedGuess), entrant1);
+        assertEq(raffle.getPrizePool(1), ENTRY_FEE);
+        assertEq(raffle.getIsRaffleOpen(1), true);
+        assertEq(raffle.getAccruedProtocolFee(), 0);
+    }
+
+    function test_EnterRaffleRevertsWithNonExistentRaffle() public {
+        uint256 guess = block.timestamp + 3600;
+        vm.prank(entrant1);
+        vm.expectRevert(FiftyFiftyRaffle.RaffleDoesNotExist.selector);
+        raffle.enterRaffleWithGuess(guess, 1);
+    }
+
+    function test_EnterRaffleRevertsWhenRaffleClosed() public {
+        raffle.createRaffle(beneficiary, ENTRY_FEE);
+        vm.prank(owner);
+        raffle.closeRaffle(1);
+
+        uint256 guess = block.timestamp + 3600;
+        vm.prank(entrant1);
+        vm.expectRevert(FiftyFiftyRaffle.RaffleIsClosed.selector);
+        raffle.enterRaffleWithGuess(guess, 1);
+    }
+
+    function test_EnterRaffleRevertsWithEarlyGuess() public {
+        vm.warp(3700); // advance 1 hour and 1 minute from now
+        raffle.createRaffle(beneficiary, ENTRY_FEE);
+        uint256 earlyGuess = block.timestamp - 3600; // 1 hour in future
+
+        vm.prank(entrant1);
+        vm.expectRevert(FiftyFiftyRaffle.GuessTimestampTooLow.selector);
+        raffle.enterRaffleWithGuess(earlyGuess, 1);
+    }
+
+    function test_EnterRaffleRevertsWithDuplicateGuess() public {
+        raffle.createRaffle(beneficiary, ENTRY_FEE);
+        uint256 guess = block.timestamp + 3600;
+
+        vm.prank(entrant1);
+        raffle.enterRaffleWithGuess(guess, 1);
+
+        vm.prank(entrant2);
+        vm.expectRevert(FiftyFiftyRaffle.GuessAlreadyEntered.selector);
+        raffle.enterRaffleWithGuess(guess, 1);
+    }
+
+    function test_EnterRaffleRoundsDownToMinute() public {
+        raffle.createRaffle(beneficiary, ENTRY_FEE);
+        uint256 guessWithSeconds = block.timestamp + 3600 + 30; // 1 hour forward + 30 seconds
+
+        vm.prank(entrant1);
+        raffle.enterRaffleWithGuess(guessWithSeconds, 1);
+
+        uint256 roundedGuess = raffle.roundDownToMinute(guessWithSeconds);
+        assertEq(raffle.getGuesses(1, roundedGuess), entrant1);
+    }
+
+    function test_EnterRaffleUpdatesPrizePool() public {
+        raffle.createRaffle(beneficiary, ENTRY_FEE);
+        uint256 guess = block.timestamp + 3600;
+
+        vm.prank(entrant1);
+        raffle.enterRaffleWithGuess(guess, 1);
+        assertEq(raffle.getPrizePool(1), ENTRY_FEE);
+
+        vm.prank(entrant2);
+        raffle.enterRaffleWithGuess(guess - 60, 1);
+        assertEq(raffle.getPrizePool(1), ENTRY_FEE * 2);
+    }
+
+    function test_EnterRaffleEmitsEvent() public {
+        vm.warp(3700); // advance 1 hour and 1 minute from now
+        raffle.createRaffle(beneficiary, ENTRY_FEE);
+        uint256 guess = block.timestamp + 3600;
+        uint256 roundedGuess = raffle.roundDownToMinute(guess);
+
+        vm.prank(entrant1);
+        vm.expectEmit(true, true, false, false);
+        emit FiftyFiftyRaffle.RaffleEntered(1, entrant1, roundedGuess);
+        raffle.enterRaffleWithGuess(guess, 1);
     }
 }

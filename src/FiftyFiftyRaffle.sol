@@ -169,12 +169,12 @@ contract FiftyFiftyRaffle is Ownable {
     }
 
     /**
-     * @notice Distributes the prize for a raffle.
+     * @notice Distributes the prize for referenced raffle.
      * @param _raffleNumber The number of the raffle to distribute the prize for
      * @dev The raffle must be closed and the winning timestamp must be set.
      * @dev The search funciton looks for nearest guess before the winning time stamp.
      * @dev If the winning timestamp is far away from the nearest guess, gas cost may be considerable or exhausted.
-     * @dev The winner must be found or this reverts and manualCloseRaffle must be called. 
+     * @dev The winner must be found or this reverts and manualCloseRaffle must be called.
      */
     function distributePrize(uint256 _raffleNumber) public {
         uint256 _prizePool = prizePool[_raffleNumber];

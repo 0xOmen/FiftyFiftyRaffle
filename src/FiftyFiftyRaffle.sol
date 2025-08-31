@@ -28,6 +28,7 @@ contract FiftyFiftyRaffle is Ownable {
     error NoWinnerFound();
     error PayoutOverflow();
     error PrizePoolIsZero();
+    error WinningTimestampTooLow();
     /* Events */
 
     event WinningTimestampSet(uint256 indexed raffleNumber, uint256 winningTimestamp);
@@ -133,6 +134,9 @@ contract FiftyFiftyRaffle is Ownable {
         }
         if (winningTimestamp[_raffleNumber] != 0) {
             revert WinningTimestampAlreadySet();
+        }
+        if (_winningTimestamp < startTimestamp[_raffleNumber]) {
+            revert WinningTimestampTooLow();
         }
         winningTimestamp[_raffleNumber] = roundDownToMinute(_winningTimestamp);
         isRaffleOpen[_raffleNumber] = false;

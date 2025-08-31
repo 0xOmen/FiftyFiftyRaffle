@@ -223,4 +223,138 @@ contract RaffleTest is Test {
         emit FiftyFiftyRaffle.RaffleEntered(1, entrant1, roundedGuess);
         raffle.enterRaffleWithGuess(guess, 1);
     }
+
+    /* Close Raffle Tests */
+
+    function test_CloseRaffleByOwner() public {
+        raffle.createRaffle(beneficiary, ENTRY_FEE);
+        vm.prank(owner);
+        raffle.closeRaffle(1);
+        assertFalse(raffle.getIsRaffleOpen(1));
+    }
+
+    function test_CloseRaffleByBeneficiary() public {
+        raffle.createRaffle(beneficiary, ENTRY_FEE);
+        vm.prank(beneficiary);
+        raffle.closeRaffle(1);
+        assertFalse(raffle.getIsRaffleOpen(1));
+    }
+
+    function test_CloseRaffleRevertsWithNonExistentRaffle() public {
+        vm.prank(owner);
+        vm.expectRevert(FiftyFiftyRaffle.RaffleDoesNotExist.selector);
+        raffle.closeRaffle(1);
+    }
+
+    function test_CloseRaffleRevertsWhenNotAuthorized() public {
+        raffle.createRaffle(beneficiary, ENTRY_FEE);
+        vm.prank(user1);
+        vm.expectRevert(FiftyFiftyRaffle.AddressNotAuthorized.selector);
+        raffle.closeRaffle(1);
+    }
+
+    function test_CloseRaffleRevertsWhenAlreadyClosed() public {
+        raffle.createRaffle(beneficiary, ENTRY_FEE);
+        vm.prank(owner);
+        raffle.closeRaffle(1);
+        vm.prank(owner);
+        vm.expectRevert(FiftyFiftyRaffle.RaffleIsClosed.selector);
+        raffle.closeRaffle(1);
+    }
+
+    function test_CloseRaffleEmitsEvent() public {
+        raffle.createRaffle(beneficiary, ENTRY_FEE);
+        vm.prank(entrant1);
+        raffle.enterRaffleWithGuess(block.timestamp + 3600, 1);
+        vm.prank(owner);
+        vm.expectEmit(true, false, false, false);
+        emit FiftyFiftyRaffle.RaffleClosed(1);
+        raffle.closeRaffle(1);
+    }
+
+    /* Set Winning Timestamp Tests */
+
+    function test_SetWinningTimestampByOwner() public {
+        raffle.createRaffle(beneficiary, ENTRY_FEE);
+        vm.warp(block.timestamp + 3700); // advance 1 hour and 1 minute from now
+        uint256 winningTime = raffle.getStartTimestamp(1) + 120;
+        vm.prank(owner);
+        raffle.setWinningTimestamp(1, winningTime);
+        assertEq(raffle.getWinningTimestamp(1), raffle.roundDownToMinute(winningTime));
+        assertFalse(raffle.getIsRaffleOpen(1));
+    }
+
+    function test_SetWinningTimestampByBeneficiary() public {
+        raffle.createRaffle(beneficiary, ENTRY_FEE);
+        vm.warp(block.timestamp + 3700); // advance 1 hour and 1 minute from now
+        uint256 winningTime = raffle.getStartTimestamp(1) + 120;
+        vm.prank(beneficiary);
+        raffle.setWinningTimestamp(1, winningTime);
+        assertEq(raffle.getWinningTimestamp(1), raffle.roundDownToMinute(winningTime));
+        assertFalse(raffle.getIsRaffleOpen(1));
+    }
+
+    function test_SetWinningTimestampRevertsWithNonExistentRaffle() public {
+        vm.warp(block.timestamp + 3700); // advance 1 hour and 1 minute from now
+        uint256 winningTime = raffle.getStartTimestamp(1) + 120;
+        vm.prank(owner);
+        vm.expectRevert(FiftyFiftyRaffle.RaffleDoesNotExist.selector);
+        raffle.setWinningTimestamp(1, winningTime);
+    }
+
+    function test_SetWinningTimestampRevertsWhenNotAuthorized() public {
+        raffle.createRaffle(beneficiary, ENTRY_FEE);
+        vm.warp(block.timestamp + 3700); // advance 1 hour and 1 minute from now
+        uint256 winningTime = raffle.getStartTimestamp(1) + 120;
+        vm.prank(user1);
+        vm.expectRevert(FiftyFiftyRaffle.AddressNotAuthorized.selector);
+        raffle.setWinningTimestamp(1, winningTime);
+    }
+
+    function test_SetWinningTimestampRevertsWithFutureTimestamp() public {
+        raffle.createRaffle(beneficiary, ENTRY_FEE);
+        uint256 futureTime = block.timestamp + 3600;
+        vm.prank(owner);
+        vm.expectRevert(FiftyFiftyRaffle.WinningTimestampTooHigh.selector);
+        raffle.setWinningTimestamp(1, futureTime);
+    }
+
+    function test_SetWinningTimestampRevertsWithEarlyTimestamp() public {
+        raffle.createRaffle(beneficiary, ENTRY_FEE);
+        uint256 earlyTime = 60;
+        vm.prank(owner);
+        vm.expectRevert(FiftyFiftyRaffle.WinningTimestampTooLow.selector);
+        raffle.setWinningTimestamp(1, earlyTime);
+    }
+
+    function test_SetWinningTimestampRevertsWhenAlreadySet() public {
+        raffle.createRaffle(beneficiary, ENTRY_FEE);
+        vm.warp(block.timestamp + 3700); // advance 1 hour and 1 minute from now
+        uint256 winningTime = raffle.getStartTimestamp(1) + 120;
+        vm.prank(owner);
+        raffle.setWinningTimestamp(1, winningTime);
+        vm.prank(owner);
+        vm.expectRevert(FiftyFiftyRaffle.WinningTimestampAlreadySet.selector);
+        raffle.setWinningTimestamp(1, winningTime);
+    }
+
+    function test_SetWinningTimestampRoundsDownToMinute() public {
+        raffle.createRaffle(beneficiary, ENTRY_FEE);
+        vm.warp(block.timestamp + 3700); // advance 1 hour and 1 minute from now
+        uint256 winningTimeWithSeconds = raffle.getStartTimestamp(1) + 120 + 30; // 1 hour ago + 30 seconds
+        vm.prank(owner);
+        raffle.setWinningTimestamp(1, winningTimeWithSeconds);
+        assertEq(raffle.getWinningTimestamp(1), raffle.roundDownToMinute(winningTimeWithSeconds));
+    }
+
+    function test_SetWinningTimestampEmitsEvent() public {
+        raffle.createRaffle(beneficiary, ENTRY_FEE);
+        vm.warp(block.timestamp + 3700); // advance 1 hour and 1 minute from now
+        uint256 winningTime = raffle.getStartTimestamp(1) + 120;
+        uint256 roundedTime = raffle.roundDownToMinute(winningTime);
+        vm.prank(owner);
+        vm.expectEmit(true, false, false, false);
+        emit FiftyFiftyRaffle.WinningTimestampSet(1, roundedTime);
+        raffle.setWinningTimestamp(1, winningTime);
+    }
 }

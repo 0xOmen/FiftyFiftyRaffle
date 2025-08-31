@@ -144,13 +144,14 @@ contract FiftyFiftyRaffle is Ownable {
     }
 
     function distributePrize(uint256 _raffleNumber) public {
+        uint256 _prizePool = prizePool[_raffleNumber];
         if (_raffleNumber > raffleNumber) {
             revert RaffleDoesNotExist();
         }
         if (isRaffleOpen[_raffleNumber] || winningTimestamp[_raffleNumber] == 0) {
             revert RaffleIsNotClosed();
         }
-        if (prizePool[_raffleNumber] == 0) {
+        if (_prizePool == 0) {
             revert PrizePoolIsZero();
         }
 
@@ -159,10 +160,10 @@ contract FiftyFiftyRaffle is Ownable {
             revert NoWinnerFound();
         }
         //calculate protocol fee amount
-        uint256 protocolFeeAmount = (prizePool[_raffleNumber] * protocolFee) / 10000;
-        uint256 payout = (prizePool[_raffleNumber] - protocolFeeAmount) / 2;
+        uint256 protocolFeeAmount = (_prizePool * protocolFee) / 10000;
+        uint256 payout = (_prizePool - protocolFeeAmount) / 2;
         accruedProtocolFee += protocolFeeAmount;
-        if (payout < protocolFeeAmount + payout + payout) {
+        if (_prizePool < protocolFeeAmount + payout + payout) {
             revert PayoutOverflow();
         }
         prizePool[_raffleNumber] = 0;

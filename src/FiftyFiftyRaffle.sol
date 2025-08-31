@@ -27,8 +27,9 @@ contract FiftyFiftyRaffle is Ownable {
     error RaffleIsNotClosed();
     error NoWinnerFound();
     error PayoutOverflow();
-
+    error PrizePoolIsZero();
     /* Events */
+
     event WinningTimestampSet(uint256 indexed raffleNumber, uint256 winningTimestamp);
     event RaffleEntered(uint256 indexed raffleNumber, address indexed entrant, uint256 guess);
     event RaffleWon(uint256 indexed raffleNumber, address indexed winner, uint256 payout);
@@ -135,7 +136,7 @@ contract FiftyFiftyRaffle is Ownable {
         }
         winningTimestamp[_raffleNumber] = roundDownToMinute(_winningTimestamp);
         isRaffleOpen[_raffleNumber] = false;
-        emit WinningTimestampSet(_raffleNumber, _winningTimestamp);
+        emit WinningTimestampSet(_raffleNumber, roundDownToMinute(_winningTimestamp));
     }
 
     function distributePrize(uint256 _raffleNumber) public {
@@ -144,6 +145,9 @@ contract FiftyFiftyRaffle is Ownable {
         }
         if (isRaffleOpen[_raffleNumber] || winningTimestamp[_raffleNumber] == 0) {
             revert RaffleIsNotClosed();
+        }
+        if (prizePool[_raffleNumber] == 0) {
+            revert PrizePoolIsZero();
         }
 
         address winner = getWinner(_raffleNumber);
@@ -157,6 +161,7 @@ contract FiftyFiftyRaffle is Ownable {
         if (payout < protocolFeeAmount + payout + payout) {
             revert PayoutOverflow();
         }
+        prizePool[_raffleNumber] = 0;
 
         emit RaffleWon(_raffleNumber, winner, payout);
         emit BeneficiaryPaid(_raffleNumber, beneficiary[_raffleNumber], payout);
@@ -168,6 +173,9 @@ contract FiftyFiftyRaffle is Ownable {
         if (_raffleNumber > raffleNumber) {
             revert RaffleDoesNotExist();
         }
+        if (prizePool[_raffleNumber] == 0) {
+            revert PrizePoolIsZero();
+        }
 
         address winner = guesses[_raffleNumber][_winningTimestamp];
         if (winner == address(0)) {
@@ -175,12 +183,12 @@ contract FiftyFiftyRaffle is Ownable {
         }
         isRaffleOpen[_raffleNumber] = false;
         winningTimestamp[_raffleNumber] = roundDownToMinute(_winningTimestamp);
-        emit WinningTimestampSet(_raffleNumber, _winningTimestamp);
-
+        emit WinningTimestampSet(_raffleNumber, roundDownToMinute(_winningTimestamp));
         //calculate protocol fee amount
         uint256 protocolFeeAmount = (prizePool[_raffleNumber] * protocolFee) / 10000;
         uint256 payout = (prizePool[_raffleNumber] - protocolFeeAmount) / 2;
         accruedProtocolFee += protocolFeeAmount;
+        prizePool[_raffleNumber] = 0;
 
         emit RaffleWon(_raffleNumber, winner, payout);
         emit BeneficiaryPaid(_raffleNumber, beneficiary[_raffleNumber], payout);

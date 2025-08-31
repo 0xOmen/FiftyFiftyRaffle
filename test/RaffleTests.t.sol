@@ -508,4 +508,122 @@ contract RaffleTest is Test {
         vm.expectRevert(FiftyFiftyRaffle.PrizePoolIsZero.selector);
         raffle.distributePrize(1);
     }
+
+    /* Manually Close Raffle Tests */
+
+    function test_ManuallyCloseRaffle() public {
+        // Setup raffle and entries
+        raffle.createRaffle(beneficiary, ENTRY_FEE);
+        uint256 winningTime = raffle.roundDownToMinute(block.timestamp + 3600);
+        vm.prank(entrant1);
+        raffle.enterRaffleWithGuess(winningTime, 1);
+        vm.prank(entrant2);
+        raffle.enterRaffleWithGuess(winningTime - 60, 1);
+        vm.warp(block.timestamp + 3700); // advance 1 hour and 1 minute from now
+
+        // Get initial balances
+        uint256 initialWinnerBalance = mockToken.balanceOf(entrant1);
+        uint256 initialBeneficiaryBalance = mockToken.balanceOf(beneficiary);
+        uint256 initialContractBalance = mockToken.balanceOf(address(raffle));
+
+        // Manually close raffle
+        vm.prank(owner);
+        raffle.manuallyCloseRaffle(1, winningTime);
+
+        // Calculate expected payouts
+        uint256 totalPrize = ENTRY_FEE * 2;
+        uint256 protocolFeeAmount = (totalPrize * PROTOCOL_FEE) / 10000;
+        uint256 payout = (totalPrize - protocolFeeAmount) / 2;
+
+        // Verify balances and state
+        assertEq(mockToken.balanceOf(entrant1), initialWinnerBalance + payout);
+        assertEq(mockToken.balanceOf(beneficiary), initialBeneficiaryBalance + payout);
+        assertEq(mockToken.balanceOf(address(raffle)), protocolFeeAmount);
+        assertEq(mockToken.balanceOf(address(raffle)), initialContractBalance - (payout + payout));
+        assertEq(raffle.getPrizePool(1), 0);
+        assertEq(raffle.getAccruedProtocolFee(), protocolFeeAmount);
+        assertFalse(raffle.getIsRaffleOpen(1));
+        assertEq(raffle.getWinningTimestamp(1), raffle.roundDownToMinute(winningTime));
+    }
+
+    function test_ManuallyCloseRaffleRevertsWithNonExistentRaffle() public {
+        vm.prank(owner);
+        vm.expectRevert(FiftyFiftyRaffle.RaffleDoesNotExist.selector);
+        raffle.manuallyCloseRaffle(1, block.timestamp + 3600);
+    }
+
+    function test_ManuallyCloseRaffleRevertsWhenNotOwner() public {
+        raffle.createRaffle(beneficiary, ENTRY_FEE);
+        vm.prank(entrant1);
+        raffle.enterRaffleWithGuess(block.timestamp + 3600, 1);
+
+        vm.prank(beneficiary);
+        vm.expectRevert();
+        raffle.manuallyCloseRaffle(1, block.timestamp + 3600);
+    }
+
+    function test_ManuallyCloseRaffleRevertsWithZeroPrizePool() public {
+        raffle.createRaffle(beneficiary, ENTRY_FEE);
+        vm.prank(owner);
+        vm.expectRevert(FiftyFiftyRaffle.PrizePoolIsZero.selector);
+        raffle.manuallyCloseRaffle(1, block.timestamp + 3600);
+    }
+
+    function test_ManuallyCloseRaffleRevertsWhenNoWinnerFound() public {
+        raffle.createRaffle(beneficiary, ENTRY_FEE);
+        vm.prank(entrant1);
+        raffle.enterRaffleWithGuess(block.timestamp + 3600, 1);
+
+        vm.prank(owner);
+        vm.expectRevert(FiftyFiftyRaffle.NoWinnerFound.selector);
+        raffle.manuallyCloseRaffle(1, block.timestamp + 7200); // Different timestamp
+    }
+
+    function test_ManuallyCloseRaffleEmitsEvents() public {
+        raffle.createRaffle(beneficiary, ENTRY_FEE);
+        uint256 winningTime = block.timestamp + 3600;
+        vm.prank(entrant1);
+        raffle.enterRaffleWithGuess(winningTime, 1);
+
+        uint256 protocolFeeAmount = (ENTRY_FEE * PROTOCOL_FEE) / 10000;
+        uint256 payout = (ENTRY_FEE - protocolFeeAmount) / 2;
+        uint256 roundedTime = raffle.roundDownToMinute(winningTime);
+
+        vm.warp(block.timestamp + 3700); // advance 1 hour and 1 minute from now
+        vm.prank(owner);
+        vm.expectEmit(true, false, false, false);
+        emit FiftyFiftyRaffle.WinningTimestampSet(1, roundedTime);
+        vm.expectEmit(true, true, false, false);
+        emit FiftyFiftyRaffle.RaffleWon(1, entrant1, payout);
+        vm.expectEmit(true, true, false, false);
+        emit FiftyFiftyRaffle.BeneficiaryPaid(1, beneficiary, payout);
+        raffle.manuallyCloseRaffle(1, roundedTime);
+    }
+
+    function test_ManuallyCloseRaffleClosesRaffle() public {
+        raffle.createRaffle(beneficiary, ENTRY_FEE);
+        uint256 winningTime = block.timestamp + 3600;
+        uint256 roundedTime = raffle.roundDownToMinute(winningTime);
+        vm.prank(entrant1);
+        raffle.enterRaffleWithGuess(winningTime, 1);
+
+        assertTrue(raffle.getIsRaffleOpen(1));
+        vm.prank(owner);
+        raffle.manuallyCloseRaffle(1, roundedTime);
+        assertFalse(raffle.getIsRaffleOpen(1));
+    }
+
+    function test_ManuallyCloseRaffleOnlyWorksOnce() public {
+        raffle.createRaffle(beneficiary, ENTRY_FEE);
+        uint256 winningTime = block.timestamp + 3600;
+        vm.prank(entrant1);
+        raffle.enterRaffleWithGuess(winningTime, 1);
+
+        uint256 roundedTime = raffle.roundDownToMinute(winningTime);
+        vm.prank(owner);
+        raffle.manuallyCloseRaffle(1, roundedTime);
+        vm.prank(owner);
+        vm.expectRevert(FiftyFiftyRaffle.PrizePoolIsZero.selector);
+        raffle.manuallyCloseRaffle(1, roundedTime);
+    }
 }

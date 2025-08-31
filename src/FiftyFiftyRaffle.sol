@@ -56,6 +56,12 @@ contract FiftyFiftyRaffle is Ownable {
     mapping(uint256 => uint256) private startTimestamp;
     uint256 private accruedProtocolFee;
 
+    /**
+     * @notice constructor is called at contract creation.
+     * @dev Owner is automatically set to deployer.
+     * @param tokenAddress The address of the token to be used for the raffle, usually USDC
+     * @param _protocolFee The fee taken from each bet to cover protocol costs (100 = 1%)
+     */
     constructor(address tokenAddress, uint256 _protocolFee) Ownable(msg.sender) {
         i_tokenAddress = tokenAddress;
         protocolFee = _protocolFee;
@@ -67,6 +73,12 @@ contract FiftyFiftyRaffle is Ownable {
         protocolFee = newProtocolFee;
     }
 
+    /**
+     * @notice Creates a new raffle with custome beneficiary and entry fee.
+     * @param _beneficiary The address of the beneficiary of the raffle
+     * @param _entryFee Price of each raffle ticket in the token specified in the constructor.
+     * Generally USDC where 1000000 = 1 USDC
+     */
     function createRaffle(address _beneficiary, uint256 _entryFee) external {
         if (_beneficiary == address(0)) {
             revert BeneficiaryCannotBeZeroAddress();
@@ -82,6 +94,12 @@ contract FiftyFiftyRaffle is Ownable {
         entryFee[raffleNumber] = _entryFee;
     }
 
+    /**
+     * @notice Enters a raffle with a guess.
+     * @param guess The guess of the user. The guess is a unix timestamp that maps to what address submitted that guess
+     * The guess is rounded down to the nearest minute.
+     * @param _raffleNumber The number of the raffle to enter
+     */
     function enterRaffleWithGuess(uint256 guess, uint256 _raffleNumber) external {
         if (_raffleNumber > raffleNumber) {
             revert RaffleDoesNotExist();
@@ -122,6 +140,13 @@ contract FiftyFiftyRaffle is Ownable {
         isRaffleOpen[_raffleNumber] = false;
     }
 
+    /**
+     * @notice Sets the winning timestamp for a raffle.
+     * @param _raffleNumber The number of the raffle to set the winning timestamp for
+     * @param _winningTimestamp The winning timestamp to set.  Will be rounded down to the nearest minute.
+     * @dev The winning timestamp must be greater than the start timestamp of the raffle and less than the current block timestamp.
+     * @dev Only the beneficiary or owner can set the winning timestamp.
+     */
     function setWinningTimestamp(uint256 _raffleNumber, uint256 _winningTimestamp) public {
         if (_raffleNumber > raffleNumber) {
             revert RaffleDoesNotExist();
@@ -143,6 +168,14 @@ contract FiftyFiftyRaffle is Ownable {
         emit WinningTimestampSet(_raffleNumber, roundDownToMinute(_winningTimestamp));
     }
 
+    /**
+     * @notice Distributes the prize for a raffle.
+     * @param _raffleNumber The number of the raffle to distribute the prize for
+     * @dev The raffle must be closed and the winning timestamp must be set.
+     * @dev The search funciton looks for nearest guess before the winning time stamp.
+     * @dev If the winning timestamp is far away from the nearest guess, gas cost may be considerable or exhausted.
+     * @dev The winner must be found or this reverts and manualCloseRaffle must be called. 
+     */
     function distributePrize(uint256 _raffleNumber) public {
         uint256 _prizePool = prizePool[_raffleNumber];
         if (_raffleNumber > raffleNumber) {
@@ -174,6 +207,14 @@ contract FiftyFiftyRaffle is Ownable {
         IERC20(i_tokenAddress).transfer(beneficiary[_raffleNumber], payout);
     }
 
+    /**
+     * @notice Sets the winning timestamp for a raffle.
+     * @param _raffleNumber The number of the raffle to set the winning timestamp for
+     * @param _winningTimestamp The winning timestamp to set.  Will be rounded down to the nearest minute.
+     * @dev This exists for when a winner is not found after the winning timestamp is set, often due to gas issues in the nearest guess search function
+     * @dev The winning timestamp must exactly match a guess or the function will revert
+     * @dev Only the owner can set the winning timestamp.
+     */
     function manuallyCloseRaffle(uint256 _raffleNumber, uint256 _winningTimestamp) external onlyOwner {
         uint256 _prizePool = prizePool[_raffleNumber];
         if (_raffleNumber > raffleNumber) {
